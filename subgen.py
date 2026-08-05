@@ -13,7 +13,7 @@ STANDARDIZED NAMING CONVENTION:
   * PROCESS_* for media processing triggers
   * SKIP_* for all skip conditions
   * SUBTITLE_* for subtitle-related settings
-  * WHISPER_* for Whisper model settings
+  * PARAKEET_* for Parakeet model settings
   * TRANSCRIBE_* for transcription settings
 
 BACKWARDS COMPATIBILITY: 
@@ -181,7 +181,7 @@ only_match_subgen_subtitles = get_env_with_fallback('SKIP_ONLY_SUBGEN_SUBTITLES'
 skip_unknown_language = convert_to_bool(os.getenv('SKIP_UNKNOWN_LANGUAGE', False))
 skip_if_no_audio_language_but_subtitles_exist = get_env_with_fallback('SKIP_IF_NO_LANGUAGE_BUT_SUBTITLES_EXIST', 'SKIP_IF_LANGUAGE_IS_NOT_SET_BUT_SUBTITLES_EXIST', False, convert_to_bool)
 ignore_forced_subtitles = convert_to_bool(os.getenv('IGNORE_FORCED_SUBTITLES', True))
-should_whisper_detect_audio_language = convert_to_bool(os.getenv('SHOULD_WHISPER_DETECT_AUDIO_LANGUAGE', False))
+should_parakeet_detect_audio_language = convert_to_bool(os.getenv('SHOULD_PARAKEET_DETECT_AUDIO_LANGUAGE', False))
 show_in_subname_subgen = convert_to_bool(os.getenv('SHOW_IN_SUBNAME_SUBGEN', True))
 show_in_subname_model = convert_to_bool(os.getenv('SHOW_IN_SUBNAME_MODEL', True))
 
@@ -1001,7 +1001,7 @@ def get_audio_start_time(video_path: str) -> float:
     
     Some containers (especially Amazon WEB-DL) have audio streams that start
     later than the video stream. Bazarr compensates with adelay silence padding,
-    but Whisper ignores digital silence, causing all timestamps to be early by
+    but Parakeet ignores digital silence, causing all timestamps to be early by
     the start_time offset.
     
     Returns the audio start_time in seconds, or 0.0 if not detectable.
@@ -1036,7 +1036,7 @@ def apply_timestamp_offset(result, offset: float) -> None:
     Shift all segment and word timestamps forward by the given offset.
     
     This compensates for audio start_time offsets in containers where the
-    audio stream starts later than the video stream. Whisper produces
+    audio stream starts later than the video stream. Parakeet produces
     timestamps relative to the audio stream start, but subtitles need
     to be aligned to the video/container timeline.
     
@@ -1947,8 +1947,8 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language:
     if should_skip_file(file_path, force_language, audio_langs=audio_langs):
         return
 
-    # Detect audio language via Whisper if no language is known and detection is enabled
-    if not force_language and should_whisper_detect_audio_language:
+    # Detect audio language via Parakeet if no language is known and detection is enabled
+    if not force_language and should_parakeet_detect_audio_language:
         detect_task = {'path': file_path, 'type': "detect_language"}
         detect_task.update(task_kwargs)
         task_queue.put(detect_task)

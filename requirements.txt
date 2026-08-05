@@ -1,7 +1,6 @@
 numpy
 fastapi
 requests
-faster-whisper
 uvicorn
 python-multipart
 ffmpeg-python

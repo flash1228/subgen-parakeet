@@ -37,13 +37,13 @@ def prompt_and_save_bazarr_env_variables():
     )
     print(instructions)
     env_vars = {
-        'WHISPER_MODEL': ('Whisper Model', 'Enter the Whisper model you want to run: tiny, tiny.en, base, base.en, small, small.en, medium, medium.en, large, distil-large-v2, distil-medium.en, distil-small.en', 'medium'),
+        'PARAKEET_MODEL': ('Parakeet Model', 'Enter the Parakeet model you want to run: parakeet-tdt-1.1b, parakeet-rnnt-1.1b, canary-1b', 'nvidia/parakeet-tdt-1.1b'),
         'WEBHOOKPORT': ('Webhook Port', 'Default listening port for subgen.py', '9000'),
         'TRANSCRIBE_DEVICE': ('Transcribe Device', 'Set as cpu or gpu', 'gpu'),
         # Defaulting to False here for the prompt, user can change
         'DEBUG': ('Debug', 'Enable debug logging (true/false)', 'False'),
         'CLEAR_VRAM_ON_COMPLETE': ('Clear VRAM', 'Attempt to clear VRAM when complete (Windows users may need to set this to False)', 'False'),
-        'APPEND': ('Append', 'Append \'Transcribed by whisper\' to generated subtitle (true/false)', 'False'),
+        'APPEND': ('Append', 'Append \'Transcribed by Parakeet\' to generated subtitle (true/false)', 'False'),
     }
 
     user_input = {}
@@ -80,7 +80,7 @@ def main():
     parser.add_argument('-d', '--debug', action='store_true', help="Enable console debugging (overrides .env and external ENV)")
     parser.add_argument('-i', '--install', action='store_true', help="Install/update all necessary packages")
     # Changed: action='store_true'
-    parser.add_argument('-a', '--append', action='store_true', help="Append 'Transcribed by whisper' (overrides .env and external ENV)")
+    parser.add_argument('-a', '--append', action='store_true', help="Append 'Transcribed by Parakeet' (overrides .env and external ENV)")
     parser.add_argument('-u', '--update', action='store_true', help="Update Subgen")
     parser.add_argument('-x', '--exit-early', action='store_true', help="Exit without running subgen.py")
     parser.add_argument('-s', '--setup-bazarr', action='store_true', help="Prompt for common Bazarr setup parameters and save them for future runs")
