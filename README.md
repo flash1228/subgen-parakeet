@@ -9,6 +9,8 @@
 <details>
 <summary><strong>Updates:</strong></summary>
 
+5 Aug 2026: **Major Migration** — Replaced Whisper (`faster-whisper` + `stable-ts`) with **NVIDIA Parakeet** (FastConformer TDT/RNNT via NeMo toolkit / ONNX Runtime). Default model: `nvidia/parakeet-tdt-1.1b` (English-only, SOTA accuracy). Optional: `nvidia/canary-1b` for 25-language multilingual + translation. New env vars: `PARAKEET_MODEL`, `PARAKEET_MODEL_DIR`, `PARAKEET_USE_ONNX`, `PARAKEET_COMPUTE_TYPE`, `PARAKEET_THREADS`, `SHOULD_PARAKEET_DETECT_AUDIO_LANGUAGE`. Added `export_parakeet_onnx.py` for one-time ONNX export. Docker images: `flash1228/subgen-parakeet:latest`, `:cpu`, `:amd`. Repository renamed to `subgen-parakeet`.
+
 7 Jun 2026: Fixed a bug where files containing only a **forced** embedded subtitle track were incorrectly treated as having full subtitle coverage and skipped. Forced tracks cover only a small fraction of dialogue (typically foreign-language inserts) and should not count as full coverage. Added `IGNORE_FORCED_SUBTITLES` (default `True`) to control this behaviour.
 
 11 Apr 2026: Fixed subtitle timing on files with audio stream offsets (common in Amazon WEB-DL). Parakeet ignores silence padding, causing subtitles to be early by the offset amount. Subgen now detects this via ffprobe and compensates automatically when the source video file is accessible. See [Audio Start-Time Offset Fix](#-audio-start-time-offset-fix) for details.
