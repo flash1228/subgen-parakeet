@@ -63,19 +63,17 @@ from threading import Event, Lock, Timer
 from typing import Union
 
 import av
-import faster_whisper
 import ffmpeg
 import numpy as np
 import requests
-import stable_whisper
 import torch
 from fastapi import Body, FastAPI, File, Form, Header, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
-from stable_whisper import Segment
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers.polling import PollingObserver as Observer
 
 from language_code import LanguageCode
+from parakeet_onnx import create_parakeet_model
 
 
 def convert_to_bool(in_bool):
@@ -113,9 +111,12 @@ plexserver = get_env_with_fallback('PLEX_SERVER', 'PLEXSERVER', 'http://192.168.
 jellyfintoken = get_env_with_fallback('JELLYFIN_TOKEN', 'JELLYFINTOKEN', 'token here')
 jellyfinserver = get_env_with_fallback('JELLYFIN_SERVER', 'JELLYFINSERVER', 'http://192.168.1.111:8096')
 
-# Whisper Configuration
-whisper_model = os.getenv('WHISPER_MODEL', 'medium')
-whisper_threads = int(os.getenv('WHISPER_THREADS', 4))
+# Parakeet Configuration
+parakeet_model = os.getenv('PARAKEET_MODEL', 'nvidia/parakeet-tdt-1.1b')
+parakeet_model_dir = os.getenv('PARAKEET_MODEL_DIR', './models/parakeet_onnx')
+parakeet_use_onnx = convert_to_bool(os.getenv('PARAKEET_USE_ONNX', True))
+parakeet_compute_type = os.getenv('PARAKEET_COMPUTE_TYPE', 'float32')
+parakeet_threads = int(os.getenv('PARAKEET_THREADS', 4))
 concurrent_transcriptions = int(os.getenv('CONCURRENT_TRANSCRIPTIONS', 2))
 transcribe_device = os.getenv('TRANSCRIBE_DEVICE', 'cpu')
 
@@ -217,7 +218,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-model = None
+# Parakeet model instance (replaces Whisper model)
+parakeet_model_instance = None
 model_cleanup_timer = None
 model_cleanup_lock = Lock()
 
@@ -518,21 +520,31 @@ TIME_OFFSET = 5
 
 def appendLine(result):
     if append:
-        lastSegment = result.segments[-1]
-        date_time_str = datetime.now().strftime("%d %b %Y - %H:%M:%S")
-        appended_text = f"Transcribed by whisperAI with faster-whisper ({whisper_model}) on {date_time_str}"
-        
-        # Create a new segment with the updated information
-        newSegment = Segment(
-            start=lastSegment.start + TIME_OFFSET,
-            end=lastSegment.end + TIME_OFFSET,
-            text=appended_text,
-            words=[], # Empty list for words
-            id=lastSegment.id + 1
-        )
-        
-        # Append the new segment to the result's segments
-        result.segments.append(newSegment)
+        # Parakeet result has segments with start, end, text attributes
+        if hasattr(result, 'segments') and result.segments:
+            lastSegment = result.segments[-1]
+            date_time_str = datetime.now().strftime("%d %b %Y - %H:%M:%S")
+            appended_text = f"Transcribed by Parakeet ({parakeet_model}) on {date_time_str}"
+            
+            # Create a new segment (simple object with attributes)
+            class SimpleSegment:
+                def __init__(self, start, end, text, words=None, id=0):
+                    self.start = start
+                    self.end = end
+                    self.text = text
+                    self.words = words or []
+                    self.id = id
+            
+            newSegment = SimpleSegment(
+                start=lastSegment.start + TIME_OFFSET,
+                end=lastSegment.end + TIME_OFFSET,
+                text=appended_text,
+                words=[],
+                id=getattr(lastSegment, 'id', len(result.segments)) + 1
+            )
+            
+            # Append the new segment to the result's segments
+            result.segments.append(newSegment)
 
 @app.get("/plex")
 @app.get("/webhook")
@@ -550,7 +562,7 @@ def webui():
 
 @app.get("/status")
 def status():
-    return {"version": f"Subgen {subgen_version}, stable-ts {stable_whisper.__version__}, faster-whisper {faster_whisper.__version__} ({docker_status})"}
+    return {"version": f"Subgen {subgen_version}, Parakeet ({docker_status})"}
 
 @app.post("/tautulli")
 def receive_tautulli_webhook(
@@ -918,7 +930,10 @@ async def openai_translations(
     response_format: str = Form(default="json"),
     temperature: float = Form(default=0.0),
 ):
-    """OpenAI-compatible translation endpoint (/v1/audio/translations). Always translates to English."""
+    """OpenAI-compatible translation endpoint (/v1/audio/translations). Always translates to English.
+    
+    Note: Requires Canary model for translation support. Parakeet TDT is English-only transcription.
+    """
     task_id = None
     valid_formats = {"json", "text", "srt", "vtt", "verbose_json"}
     if response_format not in valid_formats:
@@ -1086,11 +1101,17 @@ def asr_task_worker(task_data: dict) -> None:
         audio_offset = get_audio_start_time(video_file) if video_file else 0.0
         
         # Perform transcription
-        result = model.transcribe(task=task, language=language, **args, verbose=None)
+        # Parakeet TDT is English-only transcription; translation requires Canary
+        if task == 'translate':
+            # Check if model supports translation (Canary)
+            if hasattr(parakeet_model_instance, 'supports_translation') and parakeet_model_instance.supports_translation:
+                result = parakeet_model_instance.transcribe(task=task, language=language, **args, verbose=None)
+            else:
+                raise ValueError("Translation not supported by current model (Parakeet TDT is English-only). Use Canary model for translation.")
+        else:
+            result = parakeet_model_instance.transcribe(task=task, language=language, **args, verbose=None)
         
         # Apply audio start_time offset to compensate for container timing
-        # Whisper ignores silence padding (adelay) from Bazarr, so timestamps
-        # are relative to audio stream start, not container start
         if audio_offset > 0:
             apply_timestamp_offset(result, audio_offset)
         
@@ -1114,7 +1135,7 @@ def asr_task_worker(task_data: dict) -> None:
                         "text": seg.text, "tokens": [], "temperature": 0.0,
                         "avg_logprob": 0.0, "compression_ratio": 1.0, "no_speech_prob": 0.0,
                     }
-                    if seg.words:
+                    if hasattr(seg, 'words') and seg.words:
                         s["words"] = [{"word": w.word, "start": round(w.start, 3), "end": round(w.end, 3)} for w in seg.words]
                     segs.append(s)
                 formatted = json.dumps({
@@ -1216,9 +1237,11 @@ async def detect_language(
             audio_data = await get_audio_chunk(audio_file, detect_lang_offset, detect_lang_length)
 
         # Offload the heavy AI inference to a background thread
-        result = await asyncio.to_thread(model.transcribe, audio_data, input_sr=16000, verbose=False)
+        # Parakeet TDT is English-only; for multilingual detection we'd need Canary
+        _ = await asyncio.to_thread(parakeet_model_instance.transcribe, audio_data, input_sr=16000, verbose=False)
         
-        detected = LanguageCode.from_string(result.language)
+        # Parakeet TDT is English-only
+        detected = LanguageCode.ENGLISH
         
         logging.info(f"Detect Language Result: {detected.to_name()} ({detected.to_iso_639_1()})")
         
@@ -1285,8 +1308,9 @@ def detect_language_from_upload(task_data: dict) -> None:
         args.update(kwargs)
         args['verbose'] = False # Hide the confusing progress bar
         
-        result = model.transcribe(**args)
-        detected_language = LanguageCode.from_string(result.language)
+        _ = parakeet_model_instance.transcribe(**args)
+        # Parakeet TDT is English-only
+        detected_language = LanguageCode.ENGLISH
         language_code = detected_language.to_iso_639_1()
         
         logging.info(f"Detected language: {detected_language.to_name()} ({language_code}) - ID: {task_id}")
@@ -1371,8 +1395,9 @@ def detect_language_task(path, original_task_data=None):
         )
         
         # FIX: Hide confusing progress bar and use from_string for ISO codes
-        result = model.transcribe(audio_segment, verbose=False)
-        detected_language = LanguageCode.from_string(result.language)
+        _ = parakeet_model_instance.transcribe(audio_segment, verbose=False)
+        # Parakeet TDT is English-only
+        detected_language = LanguageCode.ENGLISH
         
         logging.info(f"Detected language: {detected_language.to_name()}")
 
@@ -1446,11 +1471,16 @@ def extract_audio_segment_to_memory(input_file, start_time, duration):
         return None
 
 def start_model():
-    global model
+    global parakeet_model_instance
     with model_load_lock:
-        if model is None:
+        if parakeet_model_instance is None:
             logging.debug("Model was purged, need to re-create")
-            model = stable_whisper.load_faster_whisper(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions, compute_type=compute_type)
+            parakeet_model_instance = create_parakeet_model(
+                model_dir=parakeet_model_dir if parakeet_use_onnx else None,
+                model_name=parakeet_model,
+                device=transcribe_device,
+                use_onnx=parakeet_use_onnx,
+            )
 
 def schedule_model_cleanup():
     """Schedule model cleanup with a delay to allow concurrent requests.
@@ -1478,7 +1508,7 @@ def schedule_model_cleanup():
 
 def perform_model_cleanup():
     """Actually perform the model cleanup."""
-    global model, model_cleanup_timer, model_cleanup_lock, active_direct_tasks
+    global parakeet_model_instance, model_cleanup_timer, model_cleanup_lock, active_direct_tasks
     
     with model_cleanup_lock: 
         logging.debug("Executing scheduled model cleanup")
@@ -1488,11 +1518,10 @@ def perform_model_cleanup():
             
         if clear_vram_on_complete and system_is_idle:
             logging.debug("Queue and direct tasks idle; clearing model from memory.")
-            if model: 
+            if parakeet_model_instance: 
                 try:
-                    model.model.unload_model()
-                    del model
-                    model = None
+                    parakeet_model_instance.unload_model()
+                    parakeet_model_instance = None
                     logging.info("Model unloaded from memory")
                 except Exception as e:
                     logging.error(f"Error unloading model: {e}")
@@ -1591,17 +1620,26 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
         if extracted_audio_file:
             data = extracted_audio_file
         
-        args = {}
-        display_name = os.path.basename(file_path)
-        args['progress_callback'] = ProgressHandler(display_name)
-            
-        if custom_regroup and custom_regroup.lower() != 'default':
-            args['regroup'] = custom_regroup
-            
-        args.update(kwargs)
+        # Parakeet TDT is English-only; Canary supports multilingual
+        # For transcription, we use the detected/forced language
+        # For translation, we need Canary model
+        lang_code = force_language.to_iso_639_1() if force_language != LanguageCode.NONE else "en"
         
-        result = model.transcribe(data, language=force_language.to_iso_639_1(), task=transcription_type, verbose=None, **args)
+        # Prepare transcription arguments
+        transcribe_kwargs = {}
+        if custom_regroup and custom_regroup.lower() != 'default':
+            transcribe_kwargs['regroup'] = custom_regroup
+        
+        transcribe_kwargs.update(kwargs)
+        
+        # Add progress callback
+        transcribe_kwargs['progress_callback'] = ProgressHandler(os.path.basename(file_path))
+        
+        # Perform transcription
+        # ParakeetNemo handles language/task internally
+        result = parakeet_model_instance.transcribe(data, language=lang_code, task=transcription_type, **transcribe_kwargs)
 
+        # Handle result - Parakeet returns TranscriptionResult
         appendLine(result)
 
         output_language = LanguageCode.from_string(result.language)
@@ -1670,7 +1708,7 @@ def name_subtitle(file_path: str, language: LanguageCode) -> str:
         The name of the subtitle file to be written.
     """
     subgen_part = ".subgen" if show_in_subname_subgen else ""
-    model_part = f".{whisper_model}" if show_in_subname_model else ""
+    model_part = f".{parakeet_model}" if show_in_subname_model else ""
     lang_part = define_subtitle_language_naming(language, subtitle_language_naming_type)
     
     return f"{os.path.splitext(file_path)[0]}{subgen_part}{model_part}.{lang_part}.srt"
@@ -2557,7 +2595,7 @@ def transcribe_existing(transcribe_folders, forceLanguage: LanguageCode = Langua
 if __name__ == "__main__":
     import uvicorn
     logging.info(f"Subgen v{subgen_version}")
-    logging.info(f"Threads: {str(whisper_threads)}, Concurrent transcriptions: {str(concurrent_transcriptions)}")
-    logging.info(f"Transcribe device: {transcribe_device}, Model: {whisper_model}")
+    logging.info(f"Threads: {str(parakeet_threads)}, Concurrent transcriptions: {str(concurrent_transcriptions)}")
+    logging.info(f"Transcribe device: {transcribe_device}, Model: {parakeet_model}")
     os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
     uvicorn.run("__main__:app", host="0.0.0.0", port=int(webhookport), reload=reload_script_on_change, use_colors=True)

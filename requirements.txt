@@ -1,5 +1,4 @@
 numpy
-stable-ts-whisperless
 fastapi
 requests
 faster-whisper
@@ -7,3 +6,9 @@ uvicorn
 python-multipart
 ffmpeg-python
 watchdog
+nemo_toolkit[asr]
+onnxruntime
+sentencepiece
+torchaudio
+soundfile
+librosa
