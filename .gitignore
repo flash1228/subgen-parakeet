@@ -10,3 +10,13 @@
 subgen.env
 
 models/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# pytest cache
+.pytest_cache/
+
+# ruff cache
+.ruff_cache/
