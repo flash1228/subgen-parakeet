@@ -141,17 +141,25 @@ def main():
     requirements_file = "requirements.txt"
 
     if args.install:
-        download_from_github(requirements_url, requirements_file)
-        install_packages_from_requirements(requirements_file)
+        # Skip requirements download in Docker (already installed at build time)
+        if not os.path.exists('/subgen/subgen.py'):
+            download_from_github(requirements_url, requirements_file)
+            install_packages_from_requirements(requirements_file)
+        else:
+            print("Running in Docker: dependencies already installed at build time")
 
+    # In Docker, files are copied at build time. Skip download if they exist.
+    # Also skip if running in Docker (subgen.py already copied at build time)
     if not os.path.exists(subgen_script_to_run) or args.update or convert_to_bool(os.getenv('UPDATE')):
-        print(f"Downloading {subgen_script_to_run} from GitHub branch {branch_name}...")
-        download_from_github(f"https://raw.githubusercontent.com/flash1228/subgen-parakeet/{branch_name}/subgen.py", subgen_script_to_run)
-        print(f"Downloading {language_code_script_to_download} from GitHub branch {branch_name}...")
-        download_from_github(f"https://raw.githubusercontent.com/flash1228/subgen-parakeet/{branch_name}/language_code.py", language_code_script_to_download)
-
-    else:
-        print(f"{subgen_script_to_run} exists and UPDATE is set to False, skipping download.")
+        # Check if we're in Docker (files already copied at build time)
+        if os.path.exists('/subgen/subgen.py') and os.path.exists('/subgen/language_code.py'):
+            print("Running in Docker: using files copied at build time")
+            subgen_script_to_run = '/subgen/subgen.py'
+        else:
+            print(f"Downloading {subgen_script_to_run} from GitHub branch {branch_name}...")
+            download_from_github(f"https://raw.githubusercontent.com/flash1228/subgen-parakeet/{branch_name}/subgen.py", subgen_script_to_run)
+            print(f"Downloading {language_code_script_to_download} from GitHub branch {branch_name}...")
+            download_from_github(f"https://raw.githubusercontent.com/flash1228/subgen-parakeet/{branch_name}/language_code.py", language_code_script_to_download)
 
     if not args.exit_early:
         #print(f"DEBUG environment variable for subgen.py: {os.getenv('DEBUG')}")
