@@ -52,7 +52,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            mccloud/subgen:cpu
-            mccloud/subgen:${{ env.version }}-cpu
-          cache-from: type=registry,ref=mccloud/subgen:cpu-buildcache
-          cache-to: type=registry,ref=mccloud/subgen:cpu-buildcache,mode=max
+            flash1228/subgen:cpu
+            flash1228/subgen:${{ env.version }}-cpu
+          cache-from: type=registry,ref=flash1228/subgen:cpu-buildcache
+          cache-to: type=registry,ref=flash1228/subgen:cpu-buildcache,mode=max
