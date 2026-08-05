@@ -46,7 +46,7 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            mccloud/subgen:latest
-            mccloud/subgen:${{ env.version }}
+            flash1228/subgen:latest
+            flash1228/subgen:${{ env.version }}
           cache-from: type=registry,ref=mccloud/subgen:buildcache
           cache-to: type=registry,ref=mccloud/subgen:buildcache,mode=max
