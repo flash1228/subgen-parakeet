@@ -47,7 +47,7 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            mccloud/subgen:amd
-            mccloud/subgen:${{ env.version }}-amd
-          cache-from: type=registry,ref=mccloud/subgen:amd-buildcache
-          cache-to: type=registry,ref=mccloud/subgen:amd-buildcache,mode=max
+            flash1228/subgen-parakeet:amd
+            flash1228/subgen-parakeet:${{ env.version }}-amd
+          cache-from: type=registry,ref=flash1228/subgen-parakeet:amd-buildcache
+          cache-to: type=registry,ref=flash1228/subgen-parakeet:amd-buildcache,mode=max

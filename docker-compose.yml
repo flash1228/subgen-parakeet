@@ -2,10 +2,14 @@ services:
    subgen:
       container_name: subgen
       tty: true
-      image: mccloud/subgen
+      image: flash1228/subgen-parakeet
       environment:
-         - "WHISPER_MODEL=medium"
-         - "WHISPER_THREADS=4"
+         - "PARAKEET_MODEL=nvidia/parakeet-tdt-1.1b"
+         - "PARAKEET_MODEL_DIR=/subgen/models/parakeet_onnx"
+         - "PARAKEET_USE_ONNX=True"
+         - "PARAKEET_COMPUTE_TYPE=float32"
+         - "PARAKEET_THREADS=4"
+         - "PARAKEET_THREADS=4"
          - "PROCADDEDMEDIA=True"
          - "PROCMEDIAONPLAY=False"
          - "NAMESUBLANG=aa"
@@ -49,7 +53,7 @@ services:
       #
       #
       # # ⚠️ For Native Linux AMD GPU IMAGE ⚠️
-      # # Change image to mccloud/subgen:amd and TRANSCRIBE_DEVICE to cuda, then
+      # # Change image to flash1228/subgen-parakeet:amd and TRANSCRIBE_DEVICE to cuda, then
       # # uncomment the following lines to pass an AMD GPU (ROCm) to the container.
       # # 
       # # CT2_CUDA_ALLOCATOR fixes GPU page faults on RDNA3 (gfx1100/1101) — OpenNMT/CTranslate2#2021
@@ -70,7 +74,7 @@ services:
       # # Requirements
       # # WSL ubuntu 22.04 matching the CTranslate2 container base os running via WSL 2.
       # # Librocmdxg https://github.com/ROCm/librocdxg
-      # # Change image to mccloud/subgen:amd and TRANSCRIBE_DEVICE to cuda, then
+      # # Change image to flash1228/subgen-parakeet:amd and TRANSCRIBE_DEVICE to cuda, then
       # # uncomment the following lines to pass an AMD GPU (ROCm) to the container.
       #    environment:
       #       - "HSA_ENABLE_DXG_DETECTION=1"

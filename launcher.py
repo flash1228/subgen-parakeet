@@ -97,7 +97,7 @@ def main():
 
     if args.launcher_update or convert_to_bool(os.getenv('LAUNCHER_UPDATE')):
         print(f"Updating launcher.py from GitHub branch {branch_name}...")
-        download_from_github(f"https://raw.githubusercontent.com/McCloudS/subgen/{branch_name}/launcher.py", f'launcher{script_name_suffix}')
+        download_from_github(f"https://raw.githubusercontent.com/flash1228/subgen-parakeet/{branch_name}/launcher.py", f'launcher{script_name_suffix}')
         excluded_args = ['--launcher-update', '-l']
         new_args = [arg for arg in sys.argv[1:] if arg not in excluded_args]
         print(f"Relaunching updated launcher: launcher{script_name_suffix}")
@@ -137,7 +137,7 @@ def main():
     # --- End Environment Variable Handling ---
 
 
-    requirements_url = "https://raw.githubusercontent.com/McCloudS/subgen/main/requirements.txt"
+    requirements_url = "https://raw.githubusercontent.com/flash1228/subgen-parakeet/main/requirements.txt"
     requirements_file = "requirements.txt"
 
     if args.install:
@@ -146,9 +146,9 @@ def main():
 
     if not os.path.exists(subgen_script_to_run) or args.update or convert_to_bool(os.getenv('UPDATE')):
         print(f"Downloading {subgen_script_to_run} from GitHub branch {branch_name}...")
-        download_from_github(f"https://raw.githubusercontent.com/McCloudS/subgen/{branch_name}/subgen.py", subgen_script_to_run)
+        download_from_github(f"https://raw.githubusercontent.com/flash1228/subgen-parakeet/{branch_name}/subgen.py", subgen_script_to_run)
         print(f"Downloading {language_code_script_to_download} from GitHub branch {branch_name}...")
-        download_from_github(f"https://raw.githubusercontent.com/McCloudS/subgen/{branch_name}/language_code.py", language_code_script_to_download)
+        download_from_github(f"https://raw.githubusercontent.com/flash1228/subgen-parakeet/{branch_name}/language_code.py", language_code_script_to_download)
 
     else:
         print(f"{subgen_script_to_run} exists and UPDATE is set to False, skipping download.")

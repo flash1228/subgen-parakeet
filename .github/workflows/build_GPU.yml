@@ -46,7 +46,7 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            flash1228/subgen:latest
-            flash1228/subgen:${{ env.version }}
-          cache-from: type=registry,ref=flash1228/subgen:buildcache
-          cache-to: type=registry,ref=flash1228/subgen:buildcache,mode=max
+            flash1228/subgen-parakeet:latest
+            flash1228/subgen-parakeet:${{ env.version }}
+          cache-from: type=registry,ref=flash1228/subgen-parakeet:buildcache
+          cache-to: type=registry,ref=flash1228/subgen-parakeet:buildcache,mode=max

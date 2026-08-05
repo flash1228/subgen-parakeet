@@ -4,22 +4,22 @@
   <ExtraParams>--gpus all</ExtraParams>
 	<Beta>false</Beta>
 	<Category>CATEGORY:</Category>
-    <Repository>mccloud/subgen</Repository>
-    <Registry>https://github.com/McCloudS/subgen</Registry>
+    <Repository>flash1228/subgen-parakeet</Repository>
+    <Registry>https://github.com/flash1228/subgen-parakeet</Registry>
     <DonateText>If you appreciate my work, then please consider donating</DonateText>
     <DonateLink>https://www.paypal.com/donate/?hosted_button_id=SU4QQP6LH5PF6</DonateLink>
     <DonateImg>https://www.paypal.com/en_US/i/btn/btn_donate_SM.gif</DonateImg>
     <Network>bridge</Network>
     <Privileged>false</Privileged>
-    <Support>https://github.com/McCloudS/subgen/issues</Support>
+    <Support>https://github.com/flash1228/subgen-parakeet/issues</Support>
     <Shell>bash</Shell>
-    <GitHub>https://github.com/McCloudS/subgen</GitHub>
-    <ReadMe>https://github.com/McCloudS/subgen/blob/main/README.md</ReadMe>
-    <Project>https://github.com/McCloudS/subgen</Project>
+    <GitHub>https://github.com/flash1228/subgen-parakeet</GitHub>
+    <ReadMe>https://github.com/flash1228/subgen-parakeet/blob/main/README.md</ReadMe>
+    <Project>https://github.com/flash1228/subgen-parakeet</Project>
     <Overview>subgen will transcribe your personal media on a Plex, Emby, or Jellyfin server to create subtitles (.srt) from audio/video files using NVIDIA Parakeet, it can also be used as a Whisper Provider in Bazarr</Overview>
     <WebUI>http://[IP]:[PORT:9000]/docs</WebUI>
-    <TemplateURL>https://github.com/McCloudS/subgen/blob/main/subgen.xml</TemplateURL>
-    <Icon>https://raw.githubusercontent.com/McCloudS/subgen/main/icon.png</Icon>
+    <TemplateURL>https://github.com/flash1228/subgen-parakeet/blob/main/subgen.xml</TemplateURL>
+    <Icon>https://raw.githubusercontent.com/flash1228/subgen-parakeet/main/icon.png</Icon>
     <Date>2024-03-23</Date>
     <Changes></Changes>
     <Config Name="Port: Webhook Port" Target="9000" Default="9000" Mode="tcp" Description="This is the port for the webhook" Type="Port" Display="always" Required="true" Mask="false"/>

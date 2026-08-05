@@ -554,7 +554,7 @@ def appendLine(result):
 @app.get("/detect-language")
 @app.get("/tautulli")
 def handle_get_request(request: Request):
-    return {"You accessed this request incorrectly via a GET request. See https://github.com/McCloudS/subgen for proper configuration"}
+    return {"You accessed this request incorrectly via a GET request. See https://github.com/flash1228/subgen-parakeet for proper configuration"}
 
 @app.get("/")
 def webui():

@@ -72,7 +72,7 @@ All read via `get_env_with_fallback(new_name, old_name, default, convert_func)` 
 | `SKIP_UNKNOWN_LANGUAGE` | `False` | Skip if language cannot be detected |
 
 ## Docker
-- Images: `mccloud/subgen:latest` (CPU+GPU), `:cpu`, `:cuda`, `:amd` (ROCm).
+- Images: `flash1228/subgen-parakeet:latest` (CPU+GPU), `:cpu`, `:cuda`, `:amd` (ROCm).
 - `docker-compose.yml` mounts `${TV}:/tv`, `${MOVIES}:/movies`, `${APPDATA}/subgen/models:/subgen/models`.
 - GPU: uncomment `deploy.resources.reservations.devices` for NVIDIA; see compose for AMD/ROCm flags (`CT2_CUDA_ALLOCATOR`, `HSA_OVERRIDE_GFX_VERSION`).
 
