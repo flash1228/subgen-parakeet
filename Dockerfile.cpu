@@ -29,13 +29,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg curl gosu tzdata \
+        libavcodec-dev libavformat-dev libavutil-dev libswresample-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed packages from builder
 COPY --from=builder /install /usr/local
 
 # App files last — changes here don't bust the layers above
-COPY launcher.py subgen.py language_code.py /subgen/
+COPY launcher.py subgen.py language_code.py parakeet_onnx.py export_parakeet_onnx.py /subgen/
 
 RUN mkdir -p /cache && chmod 777 /cache
 

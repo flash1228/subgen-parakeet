@@ -5,6 +5,7 @@ uvicorn
 python-multipart
 ffmpeg-python
 watchdog
+av
 nemo_toolkit[asr]
 onnxruntime
 sentencepiece

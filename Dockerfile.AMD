@@ -88,6 +88,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
         rocm-hip-libraries openmpi-bin libgomp1 python3-pip \
         ffmpeg python3 curl gosu tzdata libomp5 libdw1 \
+        libavcodec-dev libavformat-dev libavutil-dev libswresample-dev \
     && ln -s /usr/lib/x86_64-linux-gnu/libomp.so.5 /usr/lib/x86_64-linux-gnu/libomp.so \
     && ldconfig \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -115,7 +116,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Application files
 COPY entrypoint.sh /
 WORKDIR /subgen
-COPY launcher.py subgen.py language_code.py /subgen/
+COPY launcher.py subgen.py language_code.py parakeet_onnx.py export_parakeet_onnx.py /subgen/
 RUN mkdir -p /cache && chmod 777 /cache
 
 # Caches
