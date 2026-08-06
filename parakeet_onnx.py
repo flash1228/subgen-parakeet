@@ -12,6 +12,7 @@ Supports:
 
 import json
 import logging
+import os
 import threading
 from pathlib import Path
 from typing import List, Optional, Union
@@ -407,18 +408,21 @@ class ParakeetNemo:
         model_name: str = "nvidia/parakeet-tdt-1.1b",
         device: str = "cpu",
         compute_type: str = "float32",
+    cache_dir: str = None,
     ):
         """
         Initialize Parakeet using NeMo toolkit.
-        
+
         Args:
-            model_name: HuggingFace model name or path to .nemo file
-            device: "cpu" or "cuda"
-            compute_type: "float32", "float16", "bfloat16"
+        model_name: HuggingFace model name or path to .nemo file
+        device: "cpu" or "cuda"
+        compute_type: "float32", "float16", "bfloat16"
+        cache_dir: Directory to cache downloaded models (defaults to MODEL_PATH or ~/.cache/huggingface/hub)
         """
         self.model_name = model_name
         self.device = device
         self.compute_type = compute_type
+        self.cache_dir = cache_dir or os.getenv('MODEL_PATH', None)
         self._model = None
         self._lock = threading.Lock()
         
@@ -428,20 +432,27 @@ class ParakeetNemo:
         """Lazy load the NeMo model."""
         if self._model is not None:
             return
-        
+
         with self._lock:
             if self._model is not None:
                 return
-            
+
             try:
                 import nemo.collections.asr as nemo_asr
-                import lightning.pytorch as pl  # noqa: F401
+                import lightning.pytorch as pl # noqa: F401
             except ImportError as e:
                 logger.error(f"NeMo not installed: {e}")
                 raise
-            
+
+            # Set cache directory for Hugging Face downloads
+            if self.cache_dir:
+                os.makedirs(self.cache_dir, exist_ok=True)
+                os.environ['HF_HOME'] = self.cache_dir
+                os.environ['TRANSFORMERS_CACHE'] = self.cache_dir
+                logger.info(f"Using cache directory: {self.cache_dir}")
+
             logger.info(f"Loading NeMo model: {self.model_name}")
-            
+
             # Determine model class based on name
             if "canary" in self.model_name.lower():
                 self._model = nemo_asr.models.ASRModel.from_pretrained(self.model_name)
@@ -542,46 +553,48 @@ class ParakeetNemo:
 
 
 def create_parakeet_model(
-    model_dir: str = None,
+    model_dir: str = None, 
     model_name: str = "nvidia/parakeet-tdt-1.1b",
     device: str = "cpu",
     use_onnx: bool = True,
+    cache_dir: str = None,
     **kwargs,
 ) -> Union[ParakeetONNX, ParakeetNemo, CanaryONNX]:
     """
     Factory function to create Parakeet model instance.
-    
+
     Tries ONNX first, falls back to NeMo if ONNX models not found.
-    
+
     Args:
-        model_dir: Directory with ONNX models (for ONNX mode)
-        model_name: HuggingFace model name (for NeMo mode)
-        device: "cpu" or "cuda"
-        use_onnx: Whether to prefer ONNX Runtime
-        **kwargs: Additional arguments
-        
+    model_dir: Directory with ONNX models (for ONNX mode)
+    model_name: HuggingFace model name (for NeMo mode)
+    device: "cpu" or "cuda"
+    use_onnx: Whether to prefer ONNX Runtime
+    cache_dir: Directory to cache downloaded models (for NeMo mode)
+    **kwargs: Additional arguments
+
     Returns:
-        ParakeetONNX, CanaryONNX, or ParakeetNemo instance
-    """
+    ParakeetONNX, CanaryONNX, or ParakeetNemo instance
+"""
     # Try ONNX first if requested
     if use_onnx and model_dir and Path(model_dir).exists():
         config_path = Path(model_dir) / "config.json"
         if config_path.exists():
             with open(config_path) as f:
                 config = json.load(f)
-            
+
             model_type = config.get("model_type", "parakeet-tdt")
-            
+
             if model_type == "canary":
                 logger.info(f"Loading Canary ONNX from {model_dir}")
                 return CanaryONNX(model_dir, device, **kwargs)
             else:
                 logger.info(f"Loading Parakeet ONNX from {model_dir}")
                 return ParakeetONNX(model_dir, device, **kwargs)
-    
+
     # Fall back to NeMo
     logger.info(f"Loading {model_name} via NeMo toolkit")
-    return ParakeetNemo(model_name, device, **kwargs)
+    return ParakeetNemo(model_name, device, cache_dir=cache_dir, **kwargs)
 
 
 # For backward compatibility with stable-whisper API

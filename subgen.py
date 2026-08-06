@@ -1475,12 +1475,13 @@ def start_model():
     with model_load_lock:
         if parakeet_model_instance is None:
             logging.debug("Model was purged, need to re-create")
-            parakeet_model_instance = create_parakeet_model(
-                model_dir=parakeet_model_dir if parakeet_use_onnx else None,
-                model_name=parakeet_model,
-                device=transcribe_device,
-                use_onnx=parakeet_use_onnx,
-            )
+        parakeet_model_instance = create_parakeet_model(
+            model_dir=parakeet_model_dir if parakeet_use_onnx else None,
+            model_name=parakeet_model,
+            device=transcribe_device,
+            use_onnx=parakeet_use_onnx,
+            cache_dir=model_location,
+        )
 
 def schedule_model_cleanup():
     """Schedule model cleanup with a delay to allow concurrent requests.
