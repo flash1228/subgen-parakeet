@@ -1,6 +1,8 @@
 # Subgen
 
-> **Original work by [McCloudS](https://github.com/McCloudS/subgen)**  
+> ⚠️ **DISCLAIMER**: This is a work in progress. I have half an idea what I'm doing. Do not expect everything to work correctly. Use at your own risk.
+>
+> **Original work by [McCloudS](https://github.com/McCloudS/subgen)**
 > This fork was created with AI-assisted coding to replace Whisper with **NVIDIA Parakeet** (FastConformer TDT/RNNT) for faster, more accurate transcription.
 
 [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/donate/?hosted_button_id=SU4QQP6LH5PF6)
