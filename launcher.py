@@ -46,7 +46,6 @@ def prompt_and_save_bazarr_env_variables():
         'APPEND': ('Append', 'Append \'Transcribed by Parakeet\' to generated subtitle (true/false)', 'False'),
     }
 
-    user_input = {}
     with open('subgen.env', 'w') as file:
         for var, (description, prompt, default) in env_vars.items():
             value = input(f"{prompt} [{default}]: ") or default

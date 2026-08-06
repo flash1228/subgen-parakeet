@@ -12,10 +12,9 @@ Supports:
 
 import json
 import logging
-import os
 import threading
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import List, Optional, Union
 
 import numpy as np
 import torch
@@ -141,7 +140,7 @@ class ParakeetONNX:
         """
         # Simple mel spectrogram using torchaudio or librosa
         try:
-            import torchaudio
+            import torchaudio  # noqa: F401
             import torchaudio.transforms as T
         except ImportError:
             # Fallback to librosa
@@ -192,8 +191,7 @@ class ParakeetONNX:
         # Initialize with blank token
         decoder_input = np.array([[self.blank_token_id]], dtype=np.int64)
         tokens = []
-        max_symbols = 30  # Max symbols per step (for TDT)
-        
+
         # Cache for decoder hidden states (simplified)
         # In practice, we'd need to maintain LSTM state across steps
         for t in range(encoder_length):
@@ -437,7 +435,7 @@ class ParakeetNemo:
             
             try:
                 import nemo.collections.asr as nemo_asr
-                import lightning.pytorch as pl
+                import lightning.pytorch as pl  # noqa: F401
             except ImportError as e:
                 logger.error(f"NeMo not installed: {e}")
                 raise
