@@ -6,6 +6,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg python3 python3-pip curl gosu tzdata \
         libsndfile1 libavcodec-dev libavformat-dev libavutil-dev libswresample-dev \
+        python-is-python3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Torch — large and rarely changes; own layer so requirements.txt changes don't bust it
