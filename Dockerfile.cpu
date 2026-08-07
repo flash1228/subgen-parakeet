@@ -12,18 +12,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
         tzdata git cmake build-essential libopenblas-dev wget ca-certificates
 
-# Build libtranscribe (CPU-only) and install to /usr/local.
-# Output: /usr/local/lib/libtranscribe.so
-ARG TRANSCRIBE_CPP_REF=main
-RUN git clone --depth 1 --branch ${TRANSCRIBE_CPP_REF} \
-        https://github.com/handy-computer/transcribe.cpp.git /tmp/transcribe.cpp && \
-    cmake -S /tmp/transcribe.cpp -B /tmp/transcribe.cpp/build \
-        -DTRANSCRIBE_BUILD_SHARED=ON \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX=/usr/local && \
-    cmake --build /tmp/transcribe.cpp/build --target transcribe -- -j"$(nproc)" && \
-    cmake --install /tmp/transcribe.cpp/build --prefix /usr/local && \
-    rm -rf /tmp/transcribe.cpp
+# Building libtranscribe from source is skipped for the CPU image.
+# The transcribe-cpp pip wheel provides the necessary shared library.
+# This reduces build time and avoids potential compilation issues.
 
 # Torch — optional, only used for the CUDA cache clear path.
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -56,8 +47,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # Copy installed Python packages from builder
 COPY --from=builder /install /usr/local
 
-# Copy the freshly built libtranscribe.so from the builder stage.
-COPY --from=builder /usr/local/lib/libtranscribe.so /usr/local/lib/libtranscribe.so
+# libtranscribe.so is provided by the transcribe-cpp wheel; no need to copy it here.
 RUN ldconfig
 
 # App files last — changes here don't bust the layers above
@@ -68,8 +58,7 @@ RUN mkdir -p /cache /subgen/models && chmod 777 /cache /subgen/models
 ENV XDG_CACHE_HOME=/cache \
     HF_HOME=/cache/huggingface \
     MPLCONFIGDIR=/cache/matplotlib \
-    PYTHONUNBUFFERED=1 \
-    TRANSCRIBE_LIBRARY=/usr/local/lib/libtranscribe.so
+    PYTHONUNBUFFERED=1
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
