@@ -388,7 +388,11 @@ class ParakeetGGUF:
                     import librosa
                     data = librosa.resample(data.astype(np.float32), orig_sr=input_sr, target_sr=16000)
                 except ImportError:
-                    logger.warning("librosa not available; assuming input is already 16kHz")
+                    raise RuntimeError(
+                        f"Input audio is at {input_sr} Hz but librosa is not installed; "
+                        "transcribe-cpp requires 16 kHz mono float32 PCM. "
+                        "Install librosa (pip install librosa) or downsample before calling."
+                    )
             return np.ascontiguousarray(data, dtype=np.float32)
 
         # WAV bytes from FFmpeg output (pcm_s16le at 16kHz)
@@ -414,8 +418,6 @@ class ParakeetGGUF:
         fmt_chunk = raw.index(b"fmt ") if b"fmt " in raw else None
         if fmt_chunk is None:
             raise ValueError("WAV format chunk missing")
-        # fmt chunk size is parsed but unused — FFmpeg writes canonical PCM headers
-        int.from_bytes(raw[fmt_chunk + 4:fmt_chunk + 8], "little")
         audio_format = int.from_bytes(raw[fmt_chunk + 8:fmt_chunk + 10], "little")
         n_channels = int.from_bytes(raw[fmt_chunk + 10:fmt_chunk + 12], "little")
         sample_rate = int.from_bytes(raw[fmt_chunk + 12:fmt_chunk + 16], "little")
@@ -440,7 +442,11 @@ class ParakeetGGUF:
                 import librosa
                 pcm = librosa.resample(pcm, orig_sr=sample_rate, target_sr=16000)
             except ImportError:
-                logger.warning(f"librosa not available; cannot resample from {sample_rate}Hz to 16kHz")
+                raise RuntimeError(
+                    f"WAV stream is at {sample_rate} Hz but librosa is not installed; "
+                    "transcribe-cpp requires 16 kHz mono float32 PCM. "
+                    "Install librosa (pip install librosa) or pre-convert the audio."
+                )
 
         return np.ascontiguousarray(pcm, dtype=np.float32)
 

@@ -85,14 +85,15 @@ RUN python3 -m pip install --no-cache-dir -U --pre \
         torch --index-url https://download.pytorch.org/whl/nightly/rocm7.2
 
 # Application Python deps — transcribe-cpp native GGUF runtime handles the rest.
+COPY requirements.txt /
 RUN --mount=type=cache,target=/root/.cache/pip \
-    python3 -m pip install -U \
-        numpy fastapi requests uvicorn python-multipart ffmpeg-python \
-        watchdog av tqdm more-itertools transformers tokenizers huggingface-hub scipy \
-        transcribe-cpp
+    python3 -m pip install -U --no-cache-dir -r /requirements.txt transcribe-cpp && \
+    apt-get purge -y --auto-remove python3-pip && \
+    rm -rf /var/lib/apt/lists/* /requirements.txt
 
 # Application files
-COPY entrypoint.sh /
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 WORKDIR /subgen
 COPY launcher.py subgen.py language_code.py parakeet_gguf.py /subgen/
 RUN mkdir -p /cache /subgen/models && chmod 777 /cache /subgen/models

@@ -74,5 +74,6 @@ ENV XDG_CACHE_HOME=/cache \
     TRANSCRIBE_LIBRARY=/usr/local/lib/libtranscribe.so
 
 COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python3", "launcher.py"]
