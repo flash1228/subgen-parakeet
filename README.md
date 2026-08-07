@@ -13,7 +13,7 @@
 
 5 Aug 2026: **Major Migration** — Replaced Whisper (`faster-whisper` + `stable-ts`) with **NVIDIA Parakeet** (FastConformer TDT/RNNT via NeMo toolkit / ONNX Runtime). Default model: `nvidia/parakeet-tdt-1.1b` (English-only, SOTA accuracy). Optional: `nvidia/canary-1b` for 25-language multilingual + translation. New env vars: `PARAKEET_MODEL`, `PARAKEET_MODEL_DIR`, `PARAKEET_USE_ONNX`, `PARAKEET_COMPUTE_TYPE`, `PARAKEET_THREADS`, `SHOULD_PARAKEET_DETECT_AUDIO_LANGUAGE`. Added `export_parakeet_onnx.py` for one-time ONNX export. Docker images: `flash1228/subgen-parakeet:latest`, `:cpu`, `:amd`. Repository renamed to `subgen-parakeet`.
 
-7 Aug 2026: **GGUF Migration** — Replaced the NeMo / ONNX Runtime backend entirely with the **ggml / transcribe-cpp** runtime, running Parakeet (and Canary) directly from `.gguf` native-quantized model files. This eliminates the one-time ONNX export step, drops `nemo_toolkit`, `onnxruntime`, `sentencepiece`, `torchaudio`, `soundfile`, `librosa`, `torch` as hard runtime dependencies (torch is now optional / cache-clear only), and makes the default image smaller and faster to start. Default model is now `parakeet-tdt-0.6b-v3-Q8_0.gguf` (English-only, ~740 MB, 1.94% WER on LibriSpeech test-clean). New env vars: `PARAKEET_MODEL` (now a GGUF filename, not a HF repo id), `PARAKEET_MODEL_PATH` (directory of `.gguf` files), `TRANSCRIBE_CPP_BACKEND`, `TRANSCRIBE_LIBRARY`. Removed env vars: `PARAKEET_MODEL_DIR` (replaced by `PARAKEET_MODEL_PATH` — old name still accepted), `PARAKEET_USE_ONNX` (no longer applicable — GGUF is the only backend). Use `nvidia/canary-1b`-equivalent `canary-1b-v2-q4_k.gguf` for multilingual + translation. Removed scripts: `export_parakeet_onnx.py`, `parakeet_onnx.py`. Added: `parakeet_gguf.py`.
+7 Aug 2026: **GGUF Migration** — Replaced the NeMo / ONNX Runtime backend entirely with the **ggml / transcribe-cpp** runtime, running Parakeet (and Canary) directly from `.gguf` native-quantized model files. This eliminates the one-time ONNX export step, drops `nemo_toolkit`, `onnxruntime`, `sentencepiece`, `torchaudio`, `soundfile`, `librosa`, `torch` as hard runtime dependencies (torch is now optional / cache-clear only), and makes the default image smaller and faster to start. Default model is now `parakeet-tdt-0.6b-v3-Q8_0.gguf` (English-only, ~740 MB, 1.94% WER on LibriSpeech test-clean). New env vars: `PARAKEET_MODEL` (now a GGUF filename, not a HF repo id), `PARAKEET_MODEL_PATH` (directory of `.gguf` files), `TRANSCRIBE_CPP_BACKEND`, `TRANSCRIBE_LIBRARY`. Removed env vars: `PARAKEET_MODEL_DIR` (replaced by `PARAKEET_MODEL_PATH` — old name still accepted), `PARAKEET_USE_ONNX` (no longer applicable — GGUF is the only backend). Use `nvidia/canary-1b`-equivalent `canary-1b-v2-q4_k.gguf` for multilingual + translation. Removed scripts: `export_parakeet_onnx.py`, `parakeet_onnx.py`. Added: `parakeet_gguf.py`. **Docker images moved to GitHub Container Registry**: `ghcr.io/flash1228/subgen-parakeet:latest`, `:cpu`, `:amd`. The Docker Hub `flash1228/subgen-parakeet` images are no longer updated — existing users should switch to `ghcr.io/flash1228/subgen-parakeet` in `docker-compose.yml` / Unraid / standalone `docker pull`.
 
 7 Jun 2026: Fixed a bug where files containing only a **forced** embedded subtitle track were incorrectly treated as having full subtitle coverage and skipped. Forced tracks cover only a small fraction of dialogue (typically foreign-language inserts) and should not count as full coverage. Added `IGNORE_FORCED_SUBTITLES` (default `True`) to control this behaviour.
 
@@ -175,11 +175,11 @@ That's it. No new environment variables are required. Files without an audio off
 
 ### 1. Docker (Recommended)
 
-The easiest way to run Subgen is via Docker. We maintain images on Docker Hub (`flash1228/subgen-parakeet`):
+The easiest way to run Subgen is via Docker. We publish images to the GitHub Container Registry (`ghcr.io/flash1228/subgen-parakeet`):
 
-* `flash1228/subgen-parakeet:latest` (Supports both CPU and GPU/CUDA)
-* `flash1228/subgen-parakeet:cpu` (Smaller image, CPU only)
-* `flash1228/subgen-parakeet:amd` (AMD/ROCm experimental)
+* `ghcr.io/flash1228/subgen-parakeet:latest` (Supports both CPU and GPU/CUDA)
+* `ghcr.io/flash1228/subgen-parakeet:cpu` (Smaller image, CPU only)
+* `ghcr.io/flash1228/subgen-parakeet:amd` (AMD/ROCm experimental)
 
 **Crucial Note on Volume Mapping:** If you are using Plex/Emby/Jellyfin/Tautulli webhooks, **Subgen must see your media paths exactly identically to how your media server sees them.** For example, if Plex uses `/Share/media/TV:/tv`, Subgen needs that exact same volume mount. *(Note: This does not apply to Bazarr, which sends audio over HTTP).*
 

@@ -7,11 +7,18 @@ on:
       - 'subgen.py'
       - 'language_code.py'
       - 'launcher.py'
+      - 'parakeet_gguf.py'
       - 'requirements.txt'
       - 'entrypoint.sh'
       - 'Dockerfile'
       - '.github/workflows/build_GPU.yml'
   workflow_dispatch:
+
+# Permissions required for GHCR push (id-token write isn't needed for
+# non-attestation; packages: write is the only hard requirement).
+permissions:
+  contents: read
+  packages: write
 
 concurrency:
   group: docker-gpu-${{ github.ref }}
@@ -33,11 +40,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to Docker Hub
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -46,7 +54,7 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            flash1228/subgen-parakeet:latest
-            flash1228/subgen-parakeet:${{ env.version }}
-          cache-from: type=registry,ref=flash1228/subgen-parakeet:buildcache
-          cache-to: type=registry,ref=flash1228/subgen-parakeet:buildcache,mode=max
+            ghcr.io/flash1228/subgen-parakeet:latest
+            ghcr.io/flash1228/subgen-parakeet:${{ env.version }}
+          cache-from: type=registry,ref=ghcr.io/flash1228/subgen-parakeet:buildcache
+          cache-to: type=registry,ref=ghcr.io/flash1228/subgen-parakeet:buildcache,mode=max

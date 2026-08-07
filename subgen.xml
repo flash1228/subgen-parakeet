@@ -4,8 +4,8 @@
   <ExtraParams>--gpus all</ExtraParams>
 	<Beta>false</Beta>
 	<Category>CATEGORY:</Category>
-    <Repository>flash1228/subgen-parakeet</Repository>
-    <Registry>https://github.com/flash1228/subgen-parakeet</Registry>
+    <Repository>ghcr.io/flash1228/subgen-parakeet</Repository>
+    <Registry>https://github.com/flash1228/subgen-parakeet/pkgs/container/subgen-parakeet</Registry>
     <DonateText>If you appreciate my work, then please consider donating</DonateText>
     <DonateLink>https://www.paypal.com/donate/?hosted_button_id=SU4QQP6LH5PF6</DonateLink>
     <DonateImg>https://www.paypal.com/en_US/i/btn/btn_donate_SM.gif</DonateImg>
