@@ -206,6 +206,10 @@ wget https://huggingface.co/cstr/canary-1b-v2-GGUF/resolve/main/canary-1b-v2-q4_
 
 Then set `PARAKEET_MODEL` to the filename (e.g. `parakeet-tdt-0.6b-v3-Q8_0.gguf`). Subgen resolves it under `PARAKEET_MODEL_PATH` automatically.
 
+> 💡 **Auto-fetch:** If `PARAKEET_MODEL` is left at the default `parakeet-tdt-0.6b-v3-Q8_0.gguf` and the file isn't found under `PARAKEET_MODEL_PATH`, subgen will download it automatically on first run (~740 MB from HuggingFace). Auto-fetch is only enabled for the default model — if you set `PARAKEET_MODEL` to a different filename, subgen will refuse to silently download something you didn't ask for.
+>
+> Override the auto-fetch source via `TRANSCRIBE_DEFAULT_MODEL_URL` / `TRANSCRIBE_DEFAULT_MODEL_FILE` env vars if you want a different default.
+
 ### 3. Unraid
 
 While Unraid doesn't have an app or template for quick install, with minor manual work, you can easily install it. See [this discussion thread](https://github.com/flash1228/subgen-parakeet/discussions) for pictures and steps.

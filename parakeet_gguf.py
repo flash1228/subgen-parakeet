@@ -204,14 +204,26 @@ class ParakeetGGUF:
 
     def _resolve_model_path(self) -> str:
         """Resolve to a concrete file path. If model_path is a directory, pick
-        a GGUF file matching the configured compute_type, else the first .gguf."""
+        a GGUF file matching the configured compute_type, else the first .gguf.
+        Auto-downloads the default Parakeet TDT 0.6B v3 Q8_0 model from
+        HuggingFace if the configured file is missing under the directory."""
         p = Path(self.model_path)
         if p.is_file():
             return str(p)
         if p.is_dir():
             candidates = sorted(p.glob("*.gguf"))
             if not candidates:
-                raise RuntimeError(f"No .gguf files found in model directory {p}")
+                # Try to auto-fetch the default model into this directory.
+                fetched = self._maybe_auto_fetch(p)
+                if fetched:
+                    return str(fetched)
+                raise RuntimeError(
+                    f"No .gguf files found in model directory {p}. "
+                    f"Set PARAKEET_MODEL to a GGUF filename and either place "
+                    f"it under PARAKEET_MODEL_PATH or let subgen auto-download "
+                    f"the default model by leaving PARAKEET_MODEL at its default "
+                    f"'parakeet-tdt-0.6b-v3-Q8_0.gguf'."
+                )
             ct = self.compute_type.lower().lstrip("qw_")  # tolerant
             _ = ct  # tolerant hint; prefer_quants drives actual selection
             prefer_quants = ["q8_0", "q6_k", "q5_k", "q4_k", "q4_0", "f16", "f32"]
@@ -220,7 +232,94 @@ class ParakeetGGUF:
                     if c.name.lower().endswith(f"-{q}.gguf") or c.name.lower().endswith(f"_{q}.gguf"):
                         return str(c)
             return str(candidates[0])
+        # File doesn't exist yet — if the parent directory exists, try auto-fetch.
+        if p.parent.is_dir():
+            fetched = self._maybe_auto_fetch(p.parent, target_name=p.name)
+            if fetched:
+                return str(fetched)
         raise RuntimeError(f"Model path does not exist: {self.model_path}")
+
+    # Default model + download source. Override via env (TRANSCRIBE_DEFAULT_MODEL_URL,
+    # TRANSCRIBE_DEFAULT_MODEL_FILE) if a different default is desired.
+    _DEFAULT_MODEL_FILE = "parakeet-tdt-0.6b-v3-Q8_0.gguf"
+    _DEFAULT_MODEL_URL = (
+        "https://huggingface.co/handy-computer/parakeet-tdt-0.6b-v3-gguf/"
+        "resolve/main/parakeet-tdt-0.6b-v3-Q8_0.gguf"
+    )
+
+    def _maybe_auto_fetch(self, directory: Path, target_name: str = None) -> Optional[Path]:
+        """Auto-download the default GGUF model file if the user is using the
+        default PARAKEET_MODEL (or has explicitly enabled auto-fetch). Returns
+        the path of the downloaded file, or None if we did not attempt a fetch.
+
+        We only auto-fetch when (a) the configured PARAKEET_MODEL filename
+        matches the known default, AND (b) there isn't already a GGUF of the
+        same name present. This protects users who pointed PARAKEET_MODEL at
+        a custom file from surprising 700 MB downloads — for those, we just
+        let _resolve_model_path() raise with a helpful message."""
+        desired = target_name or self._infer_model_name_from_path()
+        if desired is None:
+            return None
+
+        url = os.getenv("TRANSCRIBE_DEFAULT_MODEL_URL", self._DEFAULT_MODEL_URL)
+        default_file = os.getenv("TRANSCRIBE_DEFAULT_MODEL_FILE", self._DEFAULT_MODEL_FILE)
+
+        # Only auto-fetch when the requested name is the well-known default
+        # (case-insensitive match on the filename). Otherwise the user has
+        # picked a custom model and we should NOT silently download a different
+        # one.
+        if desired.lower() != default_file.lower():
+            logger.warning(
+                f"Configured model '{desired}' not found in {directory}. "
+                f"Auto-fetch is only enabled for the default model "
+                f"'{default_file}'. Download '{desired}' manually and place "
+                f"it under PARAKEET_MODEL_PATH."
+            )
+            return None
+
+        target = directory / desired
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Auto-fetching default GGUF model from {url} -> {target} (~740 MB)...")
+            # Use requests if available (already a subgen dep), fall back to urllib.
+            try:
+                import requests
+                with requests.get(url, stream=True, timeout=60) as r:
+                    r.raise_for_status()
+                    total = int(r.headers.get("Content-Length", 0))
+                    downloaded = 0
+                    with open(target, "wb") as f:
+                        for chunk in r.iter_content(chunk_size=1024 * 1024):
+                            if chunk:
+                                f.write(chunk)
+                                downloaded += len(chunk)
+                                if total and downloaded % (10 * 1024 * 1024) == 0:
+                                    logger.info(f"  ...{downloaded // (1024*1024)} / {total // (1024*1024)} MB")
+            except ImportError:
+                logger.info("requests not available, falling back to urllib")
+                import urllib.request
+                urllib.request.urlretrieve(url, target)
+
+            logger.info(f"Model downloaded: {target} ({target.stat().st_size // (1024*1024)} MB)")
+            return target
+        except Exception as e:
+            logger.error(f"Failed to auto-fetch model: {e}")
+            # Clean up partial download if present.
+            if target.exists():
+                try:
+                    target.unlink()
+                except OSError:
+                    pass
+            return None
+
+    def _infer_model_name_from_path(self) -> Optional[str]:
+        """If self.model_path is a directory, the model name comes from the
+        factory's model_name kwarg (stored on self by create_parakeet_model
+        via _model_name attr). Fall back to the default filename."""
+        name = getattr(self, "_model_name", None)
+        if name:
+            return name
+        return self._DEFAULT_MODEL_FILE
 
     def _load_model(self):
         """Lazy-load the transcribe_cpp model if not already loaded."""
@@ -235,6 +334,30 @@ class ParakeetGGUF:
                 "build, set TRANSCRIBE_LIBRARY=/path/to/libtranscribe.so before importing."
             )
             raise
+
+        # The transcribe-cpp PyPI package is a pure-Python shim that requires
+        # a native library (libtranscribe.so/.dylib/.dll) to be loaded at import
+        # time. If the native lib wasn't found (no wheel, no TRANSCRIBE_LIBRARY
+        # env var, no repo auto-discovery), `Model` won't be bound — which is
+        # what produces `AttributeError: module 'transcribe_cpp' has no attribute 'Model'`.
+        # Surface a clear error pointing the user at the fix instead of a bare
+        # AttributeError.
+        if not hasattr(transcribe_cpp, "Model"):
+            msg = (
+                "transcribe_cpp imported but `Model` is not bound — the native "
+                "libtranscribe library was not loaded. To fix:\n"
+                "  1. Install a native provider: `pip install transcribe-cpp-native` "
+                "(CPU) or `pip install transcribe-cpp-native-cu12` (CUDA), or\n"
+                "  2. Build libtranscribe from "
+                "https://github.com/handy-computer/transcribe.cpp "
+                "(`cmake -B build -DTRANSCRIBE_BUILD_SHARED=ON -DTRANSCRIBE_CUDA=ON && "
+                "cmake --build build --target transcribe`) and set the "
+                "TRANSCRIBE_LIBRARY env var to the resulting shared object.\n"
+                f"Current TRANSCRIBE_LIBRARY={os.getenv('TRANSCRIBE_LIBRARY', '<unset>')}, "
+                f"TRANSCRIBE_NATIVE_PROVIDER={os.getenv('TRANSCRIBE_NATIVE_PROVIDER', '<unset>')}"
+            )
+            logger.error(msg)
+            raise RuntimeError(msg)
 
         resolved = self._resolve_model_path()
         logger.info(f"Loading GGUF model: {resolved} (backend={self.backend})")
@@ -536,10 +659,8 @@ def create_parakeet_model(
         else:
             backend = "cpu"
 
-    # Allow the user to override search behavior: if model_path is a directory
-    # and contains exactly one .gguf file, we use that. Otherwise ParakeetGGUF
-    # resolves by quant preference.
-    return ParakeetGGUF(
+    # Allow auto-fetch logic to know which filename the user requested.
+    inst = ParakeetGGUF(
         model_path=model_path,
         device=device,
         backend=backend,
@@ -547,6 +668,8 @@ def create_parakeet_model(
         threads=threads,
         **kwargs,
     )
+    inst._model_name = model_name
+    return inst
 
 
 # Backward-compat with the stable-whisper API (calls used to wrap faster-whisper)
