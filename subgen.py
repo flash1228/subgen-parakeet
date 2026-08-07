@@ -15,6 +15,7 @@ STANDARDIZED NAMING CONVENTION:
   * SUBTITLE_* for subtitle-related settings
   * PARAKEET_* for Parakeet model settings
   * TRANSCRIBE_* for transcription settings
+  * GGUF / transcribe-cpp runtime settings (PARAKEET_MODEL_PATH, TRANSCRIBE_CPP_BACKEND, TRANSCRIBE_LIBRARY)
 
 BACKWARDS COMPATIBILITY: 
 Legacy environment variable names are still supported. If both new and old names are set,
@@ -66,14 +67,21 @@ import av
 import ffmpeg
 import numpy as np
 import requests
-import torch
 from fastapi import Body, FastAPI, File, Form, Header, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers.polling import PollingObserver as Observer
 
+# torch is optional — used only for the CUDA cache clear path when present,
+# but transcribe-cpp ships its own ggml backend so torch is not required at
+# runtime. Keep the import lazy/soft so torch-less deployments still import.
+try:
+    import torch  # type: ignore
+except ImportError:
+    torch = None  # type: ignore
+
 from language_code import LanguageCode
-from parakeet_onnx import create_parakeet_model
+from parakeet_gguf import create_parakeet_model
 
 
 def convert_to_bool(in_bool):
@@ -112,13 +120,19 @@ jellyfintoken = get_env_with_fallback('JELLYFIN_TOKEN', 'JELLYFINTOKEN', 'token 
 jellyfinserver = get_env_with_fallback('JELLYFIN_SERVER', 'JELLYFINSERVER', 'http://192.168.1.111:8096')
 
 # Parakeet Configuration
-parakeet_model = os.getenv('PARAKEET_MODEL', 'nvidia/parakeet-tdt-1.1b')
-parakeet_model_dir = os.getenv('PARAKEET_MODEL_DIR', './models/parakeet_onnx')
-parakeet_use_onnx = convert_to_bool(os.getenv('PARAKEET_USE_ONNX', True))
-parakeet_compute_type = os.getenv('PARAKEET_COMPUTE_TYPE', 'float32')
+# PARAKEET_MODEL is interpreted as a filename (e.g. parakeet-tdt-0.6b-v3-Q8_0.gguf)
+# resolved under PARAKEET_MODEL_PATH (default ./models).
+parakeet_model = os.getenv('PARAKEET_MODEL', 'parakeet-tdt-0.6b-v3-Q8_0.gguf')
+parakeet_model_path = os.getenv('PARAKEET_MODEL_PATH', os.getenv('PARAKEET_MODEL_DIR', './models'))
+parakeet_compute_type = os.getenv('PARAKEET_COMPUTE_TYPE', 'q8_0')
 parakeet_threads = int(os.getenv('PARAKEET_THREADS', 4))
 concurrent_transcriptions = int(os.getenv('CONCURRENT_TRANSCRIPTIONS', 2))
 transcribe_device = os.getenv('TRANSCRIBE_DEVICE', 'cpu')
+# transcribe-cpp backend override ("auto", "cpu", "cuda", "vulkan") and an
+# optional pointer to a locally-built libtranscribe shared object.
+transcribe_cpp_backend = os.getenv('TRANSCRIBE_CPP_BACKEND', '') or None
+if os.getenv('TRANSCRIBE_LIBRARY'):
+    os.environ.setdefault('TRANSCRIBE_LIBRARY', os.getenv('TRANSCRIBE_LIBRARY'))
 
 # Processing Control - with backwards compatibility
 procaddedmedia = get_env_with_fallback('PROCESS_ADDED_MEDIA', 'PROCADDEDMEDIA', True, convert_to_bool)
@@ -1101,13 +1115,13 @@ def asr_task_worker(task_data: dict) -> None:
         audio_offset = get_audio_start_time(video_file) if video_file else 0.0
         
         # Perform transcription
-        # Parakeet TDT is English-only transcription; translation requires Canary
+        # Parakeet TDT GGUF is English-only; translation requires Canary GGUF (auto-detected from filename)
         if task == 'translate':
             # Check if model supports translation (Canary)
             if hasattr(parakeet_model_instance, 'supports_translation') and parakeet_model_instance.supports_translation:
                 result = parakeet_model_instance.transcribe(task=task, language=language, **args, verbose=None)
             else:
-                raise ValueError("Translation not supported by current model (Parakeet TDT is English-only). Use Canary model for translation.")
+                raise ValueError("Translation not supported by current model (Parakeet TDT is English-only). Use a Canary GGUF model for translation.")
         else:
             result = parakeet_model_instance.transcribe(task=task, language=language, **args, verbose=None)
         
@@ -1476,10 +1490,12 @@ def start_model():
         if parakeet_model_instance is None:
             logging.debug("Model was purged, need to re-create")
         parakeet_model_instance = create_parakeet_model(
-            model_dir=parakeet_model_dir if parakeet_use_onnx else None,
+            model_path=parakeet_model_path,
             model_name=parakeet_model,
             device=transcribe_device,
-            use_onnx=parakeet_use_onnx,
+            backend=transcribe_cpp_backend,
+            compute_type=parakeet_compute_type,
+            threads=parakeet_threads,
             cache_dir=model_location,
         )
 
@@ -1527,12 +1543,14 @@ def perform_model_cleanup():
                 except Exception as e:
                     logging.error(f"Error unloading model: {e}")
             
-            if transcribe_device.lower() == 'cuda' and torch.cuda.is_available():
-                try:
+            # transcribe-cpp ships its own ggml backend (no torch.cuda dependency),
+            # but if torch happens to be installed we still clear its cache as well.
+            try:
+                if transcribe_device.lower() == 'cuda' and torch is not None and torch.cuda.is_available():
                     torch.cuda.empty_cache()
                     logging.debug("CUDA cache cleared.")
-                except Exception as e: 
-                    logging.error(f"Error clearing CUDA cache: {e}")
+            except Exception as e: 
+                logging.error(f"Error clearing CUDA cache: {e}")
         else:
             logging.debug("Queue not idle or clear_vram disabled; skipping model cleanup")
         
@@ -1637,7 +1655,7 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
         transcribe_kwargs['progress_callback'] = ProgressHandler(os.path.basename(file_path))
         
         # Perform transcription
-        # ParakeetNemo handles language/task internally
+        # GGUF backend handles language/task internally; translation requires a Canary GGUF model
         result = parakeet_model_instance.transcribe(data, language=lang_code, task=transcription_type, **transcribe_kwargs)
 
         # Handle result - Parakeet returns TranscriptionResult
@@ -2597,6 +2615,6 @@ if __name__ == "__main__":
     import uvicorn
     logging.info(f"Subgen v{subgen_version}")
     logging.info(f"Threads: {str(parakeet_threads)}, Concurrent transcriptions: {str(concurrent_transcriptions)}")
-    logging.info(f"Transcribe device: {transcribe_device}, Model: {parakeet_model}")
+    logging.info(f"Transcribe device: {transcribe_device}, Model: {parakeet_model} (path={parakeet_model_path}, backend={transcribe_cpp_backend or 'auto'})")
     os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
     uvicorn.run("__main__:app", host="0.0.0.0", port=int(webhookport), reload=reload_script_on_change, use_colors=True)

@@ -103,21 +103,24 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     python3 -m pip install $CTRANSLATE2_ROOT/*.whl && \
     rm $CTRANSLATE2_ROOT/*.whl
 
-# torch nightly with rocm7.2 — own layer so app dep changes don't re-download torch
+# torch nightly with rocm7.2 — only used for the optional CUDA cache clear path
 RUN python3 -m pip install --no-cache-dir -U --pre \
-        torch torchaudio --index-url https://download.pytorch.org/whl/nightly/rocm7.2
+        torch --index-url https://download.pytorch.org/whl/nightly/rocm7.2
 
-# Application Python deps — merged into one layer
+# Application Python deps — transcribe-cpp native GGUF runtime handles the rest.
+# If prebuilt transcribe-cpp[cu12] wheels are not available for AMD/ROCm yet,
+# build libtranscribe from https://github.com/handy-computer/transcribe.cpp with
+# `-DTRANSCRIBE_HIP=ON` and set TRANSCRIBE_LIBRARY=/path/to/libtranscribe.so.
 RUN --mount=type=cache,target=/root/.cache/pip \
     python3 -m pip install -U \
         numpy fastapi requests uvicorn python-multipart ffmpeg-python \
-        watchdog tqdm more-itertools transformers tokenizers huggingface-hub av scipy \
-        onnxruntime nemo_toolkit[asr] sentencepiece torchaudio soundfile librosa
+        watchdog av tqdm more-itertools transformers tokenizers huggingface-hub scipy \
+        transcribe-cpp
 
 # Application files
 COPY entrypoint.sh /
 WORKDIR /subgen
-COPY launcher.py subgen.py language_code.py parakeet_onnx.py export_parakeet_onnx.py /subgen/
+COPY launcher.py subgen.py language_code.py parakeet_gguf.py /subgen/
 RUN mkdir -p /cache && chmod 777 /cache
 
 # Caches

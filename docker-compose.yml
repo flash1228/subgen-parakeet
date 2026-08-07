@@ -4,11 +4,9 @@ services:
       tty: true
       image: flash1228/subgen-parakeet
       environment:
-         - "PARAKEET_MODEL=nvidia/parakeet-tdt-1.1b"
-         - "PARAKEET_MODEL_DIR=/subgen/models/parakeet_onnx"
-         - "PARAKEET_USE_ONNX=True"
-         - "PARAKEET_COMPUTE_TYPE=float32"
-         - "PARAKEET_THREADS=4"
+         - "PARAKEET_MODEL=parakeet-tdt-0.6b-v3-Q8_0.gguf"
+         - "PARAKEET_MODEL_PATH=/subgen/models"
+         - "PARAKEET_COMPUTE_TYPE=q8_0"
          - "PARAKEET_THREADS=4"
          - "PROCADDEDMEDIA=True"
          - "PROCMEDIAONPLAY=False"

@@ -6,9 +6,9 @@ python-multipart
 ffmpeg-python
 watchdog
 av
-nemo_toolkit[asr]
-onnxruntime
-sentencepiece
-torchaudio
-soundfile
-librosa
+# ggml-native ASR runtime (Parakeet TDT 0.6B v3 / Canary 1B v2 / Whisper GGUF).
+# For NVIDIA CUDA: install with `pip install transcribe-cpp[cu12]`.
+# If prebuilt wheels are not yet available for your platform, build libtranscribe
+# from https://github.com/handy-computer/transcribe.cpp and set the
+# TRANSCRIBE_LIBRARY environment variable to the resulting shared object.
+transcribe-cpp

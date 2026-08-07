@@ -37,7 +37,7 @@ def prompt_and_save_bazarr_env_variables():
     )
     print(instructions)
     env_vars = {
-        'PARAKEET_MODEL': ('Parakeet Model', 'Enter the Parakeet model you want to run: parakeet-tdt-1.1b, parakeet-rnnt-1.1b, canary-1b', 'nvidia/parakeet-tdt-1.1b'),
+        'PARAKEET_MODEL': ('Parakeet Model', 'Enter the GGUF model filename to run: parakeet-tdt-0.6b-v3-Q8_0.gguf, parakeet-tdt-0.6b-v3-Q4_K.gguf, canary-1b-v2-q4_k.gguf', 'parakeet-tdt-0.6b-v3-Q8_0.gguf'),
         'WEBHOOKPORT': ('Webhook Port', 'Default listening port for subgen.py', '9000'),
         'TRANSCRIBE_DEVICE': ('Transcribe Device', 'Set as cpu or gpu', 'gpu'),
         # Defaulting to False here for the prompt, user can change

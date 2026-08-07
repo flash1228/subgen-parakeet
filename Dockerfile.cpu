@@ -9,9 +9,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
         tzdata
 
-# Torch — own layer so requirements.txt changes don't bust it
+# Torch — optional, only used for the CUDA cache clear path.
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --prefix=/install torch torchaudio \
+    pip install --prefix=/install torch \
         --extra-index-url https://download.pytorch.org/whl/cpu
 
 # App dependencies — only rebuilds when requirements.txt changes
@@ -37,7 +37,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 COPY --from=builder /install /usr/local
 
 # App files last — changes here don't bust the layers above
-COPY launcher.py subgen.py language_code.py parakeet_onnx.py export_parakeet_onnx.py /subgen/
+COPY launcher.py subgen.py language_code.py parakeet_gguf.py /subgen/
 
 RUN mkdir -p /cache && chmod 777 /cache
 

@@ -13,6 +13,8 @@
 
 5 Aug 2026: **Major Migration** — Replaced Whisper (`faster-whisper` + `stable-ts`) with **NVIDIA Parakeet** (FastConformer TDT/RNNT via NeMo toolkit / ONNX Runtime). Default model: `nvidia/parakeet-tdt-1.1b` (English-only, SOTA accuracy). Optional: `nvidia/canary-1b` for 25-language multilingual + translation. New env vars: `PARAKEET_MODEL`, `PARAKEET_MODEL_DIR`, `PARAKEET_USE_ONNX`, `PARAKEET_COMPUTE_TYPE`, `PARAKEET_THREADS`, `SHOULD_PARAKEET_DETECT_AUDIO_LANGUAGE`. Added `export_parakeet_onnx.py` for one-time ONNX export. Docker images: `flash1228/subgen-parakeet:latest`, `:cpu`, `:amd`. Repository renamed to `subgen-parakeet`.
 
+7 Aug 2026: **GGUF Migration** — Replaced the NeMo / ONNX Runtime backend entirely with the **ggml / transcribe-cpp** runtime, running Parakeet (and Canary) directly from `.gguf` native-quantized model files. This eliminates the one-time ONNX export step, drops `nemo_toolkit`, `onnxruntime`, `sentencepiece`, `torchaudio`, `soundfile`, `librosa`, `torch` as hard runtime dependencies (torch is now optional / cache-clear only), and makes the default image smaller and faster to start. Default model is now `parakeet-tdt-0.6b-v3-Q8_0.gguf` (English-only, ~740 MB, 1.94% WER on LibriSpeech test-clean). New env vars: `PARAKEET_MODEL` (now a GGUF filename, not a HF repo id), `PARAKEET_MODEL_PATH` (directory of `.gguf` files), `TRANSCRIBE_CPP_BACKEND`, `TRANSCRIBE_LIBRARY`. Removed env vars: `PARAKEET_MODEL_DIR` (replaced by `PARAKEET_MODEL_PATH` — old name still accepted), `PARAKEET_USE_ONNX` (no longer applicable — GGUF is the only backend). Use `nvidia/canary-1b`-equivalent `canary-1b-v2-q4_k.gguf` for multilingual + translation. Removed scripts: `export_parakeet_onnx.py`, `parakeet_onnx.py`. Added: `parakeet_gguf.py`.
+
 7 Jun 2026: Fixed a bug where files containing only a **forced** embedded subtitle track were incorrectly treated as having full subtitle coverage and skipped. Forced tracks cover only a small fraction of dialogue (typically foreign-language inserts) and should not count as full coverage. Added `IGNORE_FORCED_SUBTITLES` (default `True`) to control this behaviour.
 
 11 Apr 2026: Fixed subtitle timing on files with audio stream offsets (common in Amazon WEB-DL). Parakeet ignores silence padding, causing subtitles to be early by the offset amount. Subgen now detects this via ffprobe and compensates automatically when the source video file is accessible. See [Audio Start-Time Offset Fix](#-audio-start-time-offset-fix) for details.
@@ -105,10 +107,10 @@ Feb 2026: Contributor helped cut the GPU container size in half. Added `ASR_TIME
 
 ## 🎬 What is this?
 
-Subgen transcribes your personal media to create subtitles (`.srt` or `.lrc`) from audio/video files. It uses **NVIDIA Parakeet** (via NeMo toolkit or ONNX Runtime) for high-accuracy ASR — faster and more accurate than Whisper on supported hardware.
+Subgen transcribes your personal media to create subtitles (`.srt` or `.lrc`) from audio/video files. It uses **NVIDIA Parakeet** (via ggml / transcribe-cpp, running native-quantized `.gguf` models) for high-accuracy ASR — faster and more accurate than Whisper on supported hardware.
 
-**Parakeet TDT 1.1B** (default): English-only transcription, state-of-the-art accuracy  
-**Canary 1B** (optional): Multilingual (25 languages) + translation support
+**Parakeet TDT 0.6B v3** (default): English-only transcription, state-of-the-art accuracy  
+**Canary 1B v2** (optional): Multilingual (25 languages) + translation support
 
 It integrates perfectly with **Bazarr** (Whisper Provider compatible), or runs via webhooks triggered directly by your **Plex, Emby, Jellyfin, or Tautulli** servers whenever media is added or played.
 
@@ -127,8 +129,8 @@ If you just want to plug Subgen into Bazarr and get going, here is the absolute 
 **1. Set your Environment Variables in Subgen:**
 
 * `TRANSCRIBE_DEVICE`: Set to `cuda` if you have an Nvidia GPU (highly recommended for speed), otherwise leave as `cpu`.
-* `PARAKEET_MODEL`: Default is `nvidia/parakeet-tdt-1.1b`. Use `nvidia/canary-1b` for multilingual + translation support.
-* `PARAKEET_USE_ONNX`: Default `True` (faster inference via ONNX Runtime). Set `False` to use NeMo toolkit directly.
+* `PARAKEET_MODEL`: Default is `parakeet-tdt-0.6b-v3-Q8_0.gguf`. Use `canary-1b-v2-q4_k.gguf` for multilingual + translation support. Place the file under `PARAKEET_MODEL_PATH` (default `./models`).
+* `PARAKEET_COMPUTE_TYPE`: Preferred GGUF quantization (used when resolving a directory of multiple `.gguf` files). Default `q8_0`. Other options: `q6_k`, `q5_k`, `q4_k`, `f16`, `f32`.
 * `CONCURRENT_TRANSCRIPTIONS`: Default is `2`. Lower to `1` if you are running out of RAM/VRAM.
 
 **2. Configure Bazarr:**
@@ -190,20 +192,19 @@ The easiest way to run Subgen is via Docker. We maintain images on Docker Hub (`
 
 *(Launcher includes a wizard to help standalone users easily configure common variables).*
 
-**ONNX Export (Optional — for faster inference with `PARAKEET_USE_ONNX=True`):**
+**Obtaining GGUF models:**
 
-By default, Subgen uses **ONNX Runtime** (`PARAKEET_USE_ONNX=True`) for faster, lighter inference. This requires exported ONNX models. If you prefer to use NeMo toolkit directly (no export needed), set `PARAKEET_USE_ONNX=False`.
+Download your preferred GGUF model file and place it inside the `PARAKEET_MODEL_PATH` directory (default `./models`). Pre-quantized GGUF releases:
 
 ```bash
-# Only needed if PARAKEET_USE_ONNX=True (default)
-python export_parakeet_onnx.py --model parakeet-tdt-1.1b --output-dir ./models/parakeet_onnx
-python export_parakeet_onnx.py --model canary-1b --output-dir ./models/canary_onnx
+# Parakeet TDT 0.6B v3 (English-only, recommended Q8_0 = 740 MB)
+wget https://huggingface.co/handy-computer/parakeet-tdt-0.6b-v3-gguf/resolve/main/parakeet-tdt-0.6b-v3-Q8_0.gguf -P ./models/
+
+# Canary 1B v2 (multilingual + translation, recommended Q4_K = 673 MB)
+wget https://huggingface.co/cstr/canary-1b-v2-GGUF/resolve/main/canary-1b-v2-q4_k.gguf -P ./models/
 ```
 
-| Mode | Requires ONNX Export? | Pros |
-|------|----------------------|------|
-| `PARAKEET_USE_ONNX=True` (default) | **Yes** | Faster inference, lower memory, no PyTorch at runtime |
-| `PARAKEET_USE_ONNX=False` | No | Uses NeMo directly, simpler setup, full NeMo features |
+Then set `PARAKEET_MODEL` to the filename (e.g. `parakeet-tdt-0.6b-v3-Q8_0.gguf`). Subgen resolves it under `PARAKEET_MODEL_PATH` automatically.
 
 ### 3. Unraid
 
@@ -264,11 +265,12 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 | Variable | Default | Description |
 |---|---|---|
 | `TRANSCRIBE_DEVICE` | `cpu` | Device to transcribe on: `cpu`, `gpu`, or `cuda`. |
-| `PARAKEET_MODEL` | `nvidia/parakeet-tdt-1.1b` | Model to use: `nvidia/parakeet-tdt-1.1b` (English), `nvidia/parakeet-rnnt-1.1b` (English RNNT), `nvidia/canary-1b` (Multilingual 25 langs + translation). |
-| `PARAKEET_MODEL_DIR` | `./models/parakeet_onnx` | Directory containing exported ONNX models. |
-| `PARAKEET_USE_ONNX` | `True` | Use ONNX Runtime for inference (faster, lighter) vs NeMo toolkit. |
-| `PARAKEET_COMPUTE_TYPE` | `float32` | Precision: `float32`, `float16`, `bfloat16`. |
+| `PARAKEET_MODEL` | `parakeet-tdt-0.6b-v3-Q8_0.gguf` | GGUF model filename to use: `parakeet-tdt-0.6b-v3-Q8_0.gguf` (English), `canary-1b-v2-q4_k.gguf` (Multilingual 25 langs + translation). Resolved under `PARAKEET_MODEL_PATH`. |
+| `PARAKEET_MODEL_PATH` | `./models` | Directory containing GGUF model files. |
+| `PARAKEET_COMPUTE_TYPE` | `q8_0` | Preferred GGUF quantization when resolving a directory of multiple `.gguf` files: `q8_0`, `q6_k`, `q5_k`, `q4_k`, `f16`, `f32`. |
 | `PARAKEET_THREADS` | `4` | Number of CPU threads for inference. |
+| `TRANSCRIBE_CPP_BACKEND` | *(auto)* | Override transcribe-cpp backend: `auto`, `cpu`, `cuda`, `vulkan`. |
+| `TRANSCRIBE_LIBRARY` | *(none)* | Path to a locally-built `libtranscribe.so/.dylib/.dll`. Only needed if the `transcribe-cpp` wheels aren't available for your platform. |
 | `CONCURRENT_TRANSCRIPTIONS` | `2` | Number of files to process in parallel. |
 | `CLEAR_VRAM_ON_COMPLETE` | `True` | Do garbage collection and clear the model from VRAM when the queue is empty. |
 | `MODEL_CLEANUP_DELAY` | `30` | Seconds to wait before clearing the Parakeet model from memory. |
@@ -332,7 +334,7 @@ touch "/tv/Some Show/Season 1/.subgen_skip"  # skips just that season
 | `WORD_LEVEL_HIGHLIGHT` | `False` | Highlights words dynamically as they are spoken in the subtitle. |
 | `APPEND` | `False` | Appends a "Transcribed by Parakeet..." watermark at the very end of the `.srt`. |
 | `SHOW_IN_SUBNAME_SUBGEN` | `True` | Adds `.subgen` to the output file name. |
-| `SHOW_IN_SUBNAME_MODEL` | `True` | Adds the model used (e.g., `.parakeet-tdt-1.1b`) to the output file name. |
+| `SHOW_IN_SUBNAME_MODEL` | `True` | Adds the model used (e.g. `.parakeet-tdt-0.6B-v3`) to the output file name. |
 | `CUSTOM_REGROUP` | `cm_sl=84_sl=42++++++1` | Stable-TS grouping. Try to 'clean up' subtitles a bit. Set to `default` to use base Stable-TS. |
 
 ### 📂 System, Paths & Network Settings
@@ -364,8 +366,8 @@ touch "/tv/Some Show/Season 1/.subgen_skip"  # skips just that season
 
 ## 🌎 Supported Languages
 
-**Parakeet TDT/RNNT 1.1B:** English only  
-**Canary 1B:** 25 European languages (en, es, fr, de, it, pt, pl, ru, zh, ja, ko, ar, hi, tr, vi, th, nl, sv, da, no, fi, cs, hu, ro, uk) with automatic language detection + translation to/from English
+**Parakeet TDT 0.6B v3:** English only  
+**Canary 1B v2:** 25 European languages (en, es, fr, de, it, pt, pl, ru, zh, ja, ko, ar, hi, tr, vi, th, nl, sv, da, no, fi, cs, hu, ro, uk) with automatic language detection + translation to/from English
 
 ---
 
@@ -403,8 +405,8 @@ curl -X POST http://<your-ip>:9000/v1/audio/transcriptions \
 
 ## 🪲 Known Issues
 
-* Parakeet TDT/RNNT is English-only — use Canary for other languages
-* Translation requires Canary model (Parakeet TDT/RNNT cannot translate)
+* Parakeet TDT/RNNT is English-only — use Canary (GGUF) for other languages
+* Translation requires a Canary GGUF model (Parakeet TDT/RNNT cannot translate)
 * It uses trained AI models; there *will* occasionally be mistranslations or hallucinations based on background noise
 
 ---
@@ -413,10 +415,10 @@ curl -X POST http://<your-ip>:9000/v1/audio/transcriptions \
 
 * [NVIDIA Parakeet](https://github.com/NVIDIA/NeMo) — FastConformer TDT/RNNT ASR models
 * [NVIDIA Canary](https://github.com/NVIDIA/NeMo) — Multilingual ASR + Translation
-* [NeMo Toolkit](https://github.com/NVIDIA/NeMo) — NVIDIA's ASR framework
-* [ONNX Runtime](https://onnxruntime.ai/) — Fast inference engine
-* [Whisper.cpp](https://github.com/ggerganov/whisper.cpp) for original implementation
+* [transcribe.cpp](https://github.com/handy-computer/transcribe.cpp) (and `transcribe-cpp` Python bindings) — the ggml-native runtime that runs Parakeet/Canary from `.gguf` files
+* [parakeet.cpp](https://github.com/mudler/parakeet.cpp) and [whisper.cpp](https://github.com/ggml-org/whisper.cpp) — upstream ggml runtimes for Parakeet
+* [GGUF model weights by handy-computer, cstr, mudler, danbev](https://huggingface.co/handy-computer/parakeet-tdt-0.6b-v3-gguf) — pre-quantized Parakeet / Canary GGUF releases
 * Google & FFmpeg
-* [stable-ts](https://github.com/jianfch/stable-ts) — Subtitle timestamp alignment
+* [stable-ts](https://github.com/jianfch/stable-ts) — Subtitle timestamp alignment (legacy inspiration)
 * [Whisper ASR Webservice](https://github.com/ahmetoner/whisper-asr-webservice) for Bazarr HTTP webhook logic
 * Community Contributors
