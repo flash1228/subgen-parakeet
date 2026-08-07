@@ -6,25 +6,8 @@ FROM nvidia/cuda:12.6.1-devel-ubuntu22.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        git cmake build-essential libopenblas-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Build libtranscribe from source against this image's CUDA 12.6 toolkit.
-# Pinned to a known-good ref of handy-computer/transcribe.cpp; bump ARG to
-# track upstream. The shared library is installed to /usr/local/lib so it's
-# found via TRANSCRIBE_LIBRARY at runtime.
-ARG TRANSCRIBE_CPP_REF=main
-RUN git clone --depth 1 --branch ${TRANSCRIBE_CPP_REF} \
-        https://github.com/handy-computer/transcribe.cpp.git /tmp/transcribe.cpp && \
-    cmake -S /tmp/transcribe.cpp -B /tmp/transcribe.cpp/build \
-        -DTRANSCRIBE_BUILD_SHARED=ON \
-        -DTRANSCRIBE_CUDA=ON \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX=/usr/local && \
-    cmake --build /tmp/transcribe.cpp/build --target transcribe -- -j"$(nproc)" && \
-    cmake --install /tmp/transcribe.cpp/build --prefix /usr/local && \
-    rm -rf /tmp/transcribe.cpp
+# libtranscribe is provided by the transcribe-cpp[cu12] wheel.
+# No source compilation is performed to keep the image lean.
 
 # ---- Stage 2: runtime -------------------------------------------------------
 # The -base- flavor is much smaller (~200 MB) and carries the CUDA driver
@@ -36,7 +19,7 @@ FROM nvidia/cuda:12.6.1-base-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Copy the CUDA-backed libtranscribe shared library built in stage 1.
-COPY --from=builder /usr/local/lib/libtranscribe.so /usr/local/lib/libtranscribe.so
+# libtranscribe is provided by the transcribe-cpp[cu12] wheel; no copy needed
 
 RUN ldconfig && \
     apt-get update && apt-get install -y --no-install-recommends \
@@ -69,9 +52,7 @@ RUN mkdir -p /cache /subgen/models && chmod 777 /cache /subgen/models
 ENV XDG_CACHE_HOME=/cache \
     HF_HOME=/cache/huggingface \
     MPLCONFIGDIR=/cache/matplotlib \
-    PYTHONUNBUFFERED=1 \
-    # Tell transcribe-cpp where to find the shared library we just built.
-    TRANSCRIBE_LIBRARY=/usr/local/lib/libtranscribe.so
+    PYTHONUNBUFFERED=1
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
