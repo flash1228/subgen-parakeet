@@ -1,5 +1,8 @@
 FROM nvidia/cuda:12.6.1-base-ubuntu22.04
 
+# Prevent apt post-install prompts (tzdata etc.) from stalling the build.
+ENV DEBIAN_FRONTEND=noninteractive
+
 # Apt packages — own layer so pip changes don't re-run apt.
 # Adds build tools (cmake, g++, git, libopenblas-dev) for building libtranscribe
 # from source, since transcribe-cpp-native wheels aren't reliably published yet.

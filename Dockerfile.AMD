@@ -4,6 +4,9 @@
 # ============================================================
 FROM rocm/dev-ubuntu-22.04:7.2 AS builder
 
+# Prevent apt post-install prompts (tzdata etc.) from stalling the build.
+ENV DEBIAN_FRONTEND=noninteractive
+
 # Default ROCm arch(es) to target — override at build time via --build-arg.
 # `rocminfo | grep gfx` prints the right value for your GPU. Pass a
 # semicolon-separated list for several architectures. ROCm 7.2 supports
@@ -11,13 +14,16 @@ FROM rocm/dev-ubuntu-22.04:7.2 AS builder
 ARG AMDGPU_TARGETS="gfx1030;gfx1100;gfx1101;gfx1150;gfx1200;gfx1201"
 ARG TRANSCRIBE_CPP_REF=main
 
-# Build tools + transcribe.cpp deps. The HIP toolchain lives in the base image.
+# Build tools + transcribe.cpp deps. The HIP toolchain lives in the
+# base image; we additionally need the ROCm math/tensor dev libs that
+# ggml's HIP backend links against (rocBLAS, rocSPARSE, rocSOLVER, MIOpen).
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && \
     apt-get install -y --no-install-recommends \
         rocm-hip-runtime-dev hipblas-common-dev hipblas-dev hipcub-dev \
         hiprand-dev rocprim-dev rocrand-dev rocthrust-dev \
+        rocblas-dev rocsolver-dev rocsparse-dev \
         python3-dev python3-pip wget git ca-certificates \
         cmake build-essential libopenblas-dev && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -25,13 +31,27 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 WORKDIR /root
 
 # Build libtranscribe with HIP backend. Output: /usr/local/lib/libtranscribe.so
+# We pass AMDGPU_TARGETS, GPU_TARGETS, and CMAKE_HIP_ARCHITECTURES because
+# different ROCm CMake module versions look for each. We also pin the HIP
+# compilers explicitly (amdclang/amdclang++) and point CMake at /opt/rocm so
+# package discovery doesn't fall over. CMAKE_HIP_FLAGS suppresses the
+# -Wno-deprecated-literal-operator warning that fires on ROCm 7.2 headers.
+ENV ROCM_PATH=/opt/rocm \
+    HIP_PLATFORM=amd
 RUN git clone --depth 1 --branch ${TRANSCRIBE_CPP_REF} \
         https://github.com/handy-computer/transcribe.cpp.git /tmp/transcribe.cpp && \
     cmake -S /tmp/transcribe.cpp -B /tmp/transcribe.cpp/build \
+        -DCMAKE_C_COMPILER=amdclang \
+        -DCMAKE_CXX_COMPILER=amdclang++ \
+        -DCMAKE_HIP_COMPILER=hipcc \
+        -DCMAKE_HIP_ARCHITECTURES="${AMDGPU_TARGETS}" \
+        -DAMDGPU_TARGETS="${AMDGPU_TARGETS}" \
+        -DGPU_TARGETS="${AMDGPU_TARGETS}" \
+        -DCMAKE_PREFIX_PATH="${ROCM_PATH}" \
         -DTRANSCRIBE_BUILD_SHARED=ON \
         -DTRANSCRIBE_HIP=ON \
-        -DAMDGPU_TARGETS="${AMDGPU_TARGETS}" \
         -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_HIP_FLAGS="-Wno-deprecated-literal-operator" \
         -DCMAKE_INSTALL_PREFIX=/usr/local && \
     cmake --build /tmp/transcribe.cpp/build --target transcribe -- -j"$(nproc)" && \
     cmake --install /tmp/transcribe.cpp/build --prefix /usr/local && \

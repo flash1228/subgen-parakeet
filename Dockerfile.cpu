@@ -1,6 +1,9 @@
 # === Stage 1: Build libtranscribe from source + install Python deps ===
 FROM python:3.11-slim-bullseye AS builder
 
+# Prevent apt post-install prompts (tzdata etc.) from stalling the build.
+ENV DEBIAN_FRONTEND=noninteractive
+
 WORKDIR /subgen
 
 # Build tools + OpenBLAS-accelerated CPU path for transcribe.cpp.
@@ -35,6 +38,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # === Stage 2: Minimal runtime image ===
 FROM python:3.11-slim-bullseye AS runtime
+
+# Prevent apt post-install prompts (tzdata etc.) from stalling the build.
+ENV DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /subgen
 
