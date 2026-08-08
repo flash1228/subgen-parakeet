@@ -38,7 +38,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # transcribe-cpp[cu12] pulls the CUDA 12 native provider wheel.
 COPY requirements.txt /
 RUN --mount=type=cache,target=/root/.cache/pip \
-    python3 -m pip install -U --no-cache-dir "transcribe-cpp[cu12]" -r /requirements.txt && \
+    python3 -m pip install -U --no-cache-dir "transcribe-cpp[cu12]" "transcribe-cpp-native-cu12" -r /requirements.txt && \
     apt-get purge -y --auto-remove python3-pip && \
     rm -rf /var/lib/apt/lists/*
 
