@@ -39,6 +39,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 COPY requirements.txt /
 RUN --mount=type=cache,target=/root/.cache/pip \
     python3 -m pip install -U --no-cache-dir "transcribe-cpp[cu12]" "transcribe-cpp-native-cu12" -r /requirements.txt && \
+    ldconfig && \
     apt-get purge -y --auto-remove python3-pip && \
     rm -rf /var/lib/apt/lists/*
 
@@ -52,7 +53,8 @@ RUN mkdir -p /cache /subgen/models && chmod 777 /cache /subgen/models
 ENV XDG_CACHE_HOME=/cache \
     HF_HOME=/cache/huggingface \
     MPLCONFIGDIR=/cache/matplotlib \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    LD_LIBRARY_PATH=/usr/local/lib:${LD_LIBRARY_PATH}
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
